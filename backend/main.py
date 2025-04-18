@@ -1,15 +1,13 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import UploadFile, File, Form, FastAPI, HTTPException
+from typing import Annotated, Optional
 from fastapi.middleware.cors import CORSMiddleware
-from  openai import OpenAI
+from openai import OpenAI
+import pdfplumber  
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
-print("Loaded API KEY:", os.getenv("OPENAI_API_KEY"))
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-
 
 app = FastAPI()
 
@@ -21,33 +19,45 @@ app.add_middleware(
     allow_headers = ["*"],
 )
 
-class LearningRequest(BaseModel):
-    topic: str
+@app.post("/smart-coach")
+async def smart_coach(
+    question: Annotated[Optional[str], Form()] = None,
+    goal: Annotated[Optional[str], Form()] = None,
+    file: Optional[UploadFile] = File(None)
+):
+    resume_text = ""
+
+    if file:
+        contents = await file.read()
+        with open("temp_resume.pdf", "wb") as f:
+            f.write(contents)
+        with pdfplumber.open("temp_resume.pdf") as pdf:
+            resume_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
+        os.remove("temp_resume.pdf")
 
 
-@app.post("/generate-roadmap")
-async def generate_roadmap(request: LearningRequest):
-    if not request.topic:
-        raise HTTPException(status_code =400, detail = "Please provide a topic" )
-    try:
-        prompt = (
-            f"You are an expert AI career coach. A user wants to become proficient in {request.topic}. "
-            "Create a clear and practical 3-step learning roadmap with resources, estimated timeline, "
-            "and the most important concepts to master."
-        )
-        response = client.chat.completions.create(
-            model = "gpt-3.5-turbo",
-            messages = [{"role":"user", "content": prompt}],
-            temperature = 0.7
-        ) 
-        roadmap = response.choices[0].message.content
-        return {"roadmap": roadmap}
+    # 🧠 Build prompt dynamically
+    prompt = "You are an expert AI career coach.\n\n"
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Something went wrong: {str(e)}")
+    if resume_text:
+        prompt += f"Here is the user's resume:\n{resume_text}\n\n"
 
-@app.get("/check-key")
-def check_key():
-    return{
-        "key": os.getenv("OPENAI_API_KEY")
-    }
+    if question:
+        prompt += f"The user asked the following question:\n{question}\n\n"
+
+    if goal:
+        prompt += f"The user's career goal is to become proficient in: {goal}.\n"
+        prompt += "Create a 3-step learning roadmap including skills, resources, and timeline.\n"
+
+    if not question and not goal:
+        raise HTTPException(status_code=400, detail="Please provide a goal or a question.")
+
+    # 🔮 Send to OpenAI
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7
+    )
+    answer = response.choices[0].message.content
+
+    return {"answer": answer}
