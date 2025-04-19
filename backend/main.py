@@ -23,7 +23,9 @@ app.add_middleware(
 async def smart_coach(
     question: Annotated[Optional[str], Form()] = None,
     goal: Annotated[Optional[str], Form()] = None,
-    file: Optional[UploadFile] = File(None)
+    file: Optional[UploadFile] = File(None),
+    model: Annotated[Optional[str], Form()] = "gpt-4o"
+
 ):
     resume_text = ""
 
@@ -37,6 +39,13 @@ async def smart_coach(
 
 
     # 🧠 Build prompt dynamically
+    region_context = (
+    "The user is based in West Africa. Please consider regional job opportunities, affordable certifications, and accessible online resources.\n"
+    "Highlight programs like ALX Africa, Andela, Zindi, MEST, and Google Africa Developer Scholarship. "
+    "Respond with empathy toward limited infrastructure (internet access, power). "
+    "Feel free to respond in French if the resume is in French.\n\n"
+    )
+
     prompt = "You are an expert AI career coach.\n\n"
 
     if resume_text:
@@ -47,15 +56,15 @@ async def smart_coach(
 
     if goal:
         prompt += f"The user's career goal is to become proficient in: {goal}.\n"
-        prompt += "Create a 3-step learning roadmap including skills, resources, and timeline.\n"
+        prompt += "Create a 3-step learning roadmap including skills, resources, trainings' link and timeline.\n"
 
     if not question and not goal:
         raise HTTPException(status_code=400, detail="Please provide a goal or a question.")
 
     # 🔮 Send to OpenAI
     response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}],
+        model=model,
+        messages=[{"role": "user", "content": prompt+region_context}],
         temperature=0.7
     )
     answer = response.choices[0].message.content
