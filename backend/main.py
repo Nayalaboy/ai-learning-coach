@@ -1,70 +1,86 @@
+# backend/main.py
+
 from fastapi import UploadFile, File, Form, FastAPI, HTTPException
-from typing import Annotated, Optional
+from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
-import pdfplumber  
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise RuntimeError("Missing OPENAI_API_KEY in .env")
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins = ["*"],
-    allow_credentials = True,
-    allow_methods = ["*"],
-    allow_headers = ["*"],
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
+@app.get("/", tags=["Health"])
+async def root():
+    return {"status": "ok"}
 
 @app.post("/smart-coach")
 async def smart_coach(
-    question: Annotated[Optional[str], Form()] = None,
-    goal: Annotated[Optional[str], Form()] = None,
+    question: Optional[str] = Form(None),
+    goal: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
-    model: Annotated[Optional[str], Form()] = "gpt-4o"
-
+    model: str = Form("gpt-4o")
 ):
+    import pdfplumber
+
+    if not (file or question or goal):
+        raise HTTPException(400, "Please provide a PDF, a question, or a goal.")
+
     resume_text = ""
-
     if file:
+        if file.content_type != "application/pdf":
+            raise HTTPException(415, "Only PDFs are supported")
         contents = await file.read()
-        with open("temp_resume.pdf", "wb") as f:
+        tmp = "temp_resume.pdf"
+        with open(tmp, "wb") as f:
             f.write(contents)
-        with pdfplumber.open("temp_resume.pdf") as pdf:
-            resume_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
-        os.remove("temp_resume.pdf")
+        try:
+            with pdfplumber.open(tmp) as pdf:
+                resume_text = "\n".join(
+                    page.extract_text() or "" for page in pdf.pages
+                )
+        finally:
+            os.remove(tmp)
 
-
-    # 🧠 Build prompt dynamically
     region_context = (
-    "The user is based in West Africa. Please consider regional job opportunities, affordable certifications, and accessible online resources.\n"
-    "Highlight programs like ALX Africa, Andela, Zindi, MEST, and Google Africa Developer Scholarship. "
-    "Respond with empathy toward limited infrastructure (internet access, power). "
-    "Feel free to respond in French if the resume is in French.\n\n"
+        "You are an expert AI career coach with deep knowledge of West African programs "
+        "(ALX Africa, Andela, Zindi, MEST, Google Africa) and infrastructure constraints. "
+        "You can answer in English or French.\n\n"
     )
 
-    prompt = "You are an expert AI career coach.\n\n"
+    parts = [region_context]
 
     if resume_text:
-        prompt += f"Here is the user's resume:\n{resume_text}\n\n"
+        parts.append(f"Resume:\n{resume_text}")
 
     if question:
-        prompt += f"The user asked the following question:\n{question}\n\n"
+        parts.append(f"Question:\n{question}")
 
     if goal:
-        prompt += f"The user's career goal is to become proficient in: {goal}.\n"
-        prompt += "Create a 3-step learning roadmap including skills, resources, trainings' link and timeline.\n"
+        parts.append(
+            f"Goal:\n{goal}\n\n"
+            "Please create a 3‑step learning roadmap with key skills, resources (with links), and an estimated timeline."
+        )
 
-    if not question and not goal:
-        raise HTTPException(status_code=400, detail="Please provide a goal or a question.")
+    prompt = "\n\n".join(parts)
 
-    # 🔮 Send to OpenAI
     response = client.chat.completions.create(
         model=model,
-        messages=[{"role": "user", "content": prompt+region_context}],
+        messages=[{"role": "user", "content": prompt}],
         temperature=0.7
     )
     answer = response.choices[0].message.content
