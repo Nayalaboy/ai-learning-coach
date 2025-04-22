@@ -1,10 +1,14 @@
 # backend/main.py
 
-from fastapi import UploadFile, File, Form, FastAPI, HTTPException
-from typing import Optional
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, HttpUrl
+from typing import List, Optional
 from openai import OpenAI
 import os
+import json
+import tempfile
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,7 +18,7 @@ if not OPENAI_API_KEY:
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-app = FastAPI()
+app = FastAPI(title="AI Learning Coach API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,65 +28,87 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class Step(BaseModel):
+    title: str
+    description: str
+    links: List[HttpUrl] = []
+
+class CoachResponse(BaseModel):
+    steps: List[Step]
+
 @app.get("/", tags=["Health"])
-async def root():
+async def health():
     return {"status": "ok"}
 
-@app.post("/smart-coach")
+@app.post("/smart-coach", response_model=CoachResponse, tags=["Coach"])
 async def smart_coach(
     question: Optional[str] = Form(None),
     goal: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     model: str = Form("gpt-4o")
 ):
-    import pdfplumber
+    import pdfplumber  # lazy‑load so docs start fast
 
     if not (file or question or goal):
         raise HTTPException(400, "Please provide a PDF, a question, or a goal.")
 
+    # Extract resume text
     resume_text = ""
     if file:
         if file.content_type != "application/pdf":
-            raise HTTPException(415, "Only PDFs are supported")
-        contents = await file.read()
-        tmp = "temp_resume.pdf"
-        with open(tmp, "wb") as f:
-            f.write(contents)
+            raise HTTPException(415, "Only PDFs are supported.")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(await file.read())
+            tmp_path = tmp.name
         try:
-            with pdfplumber.open(tmp) as pdf:
-                resume_text = "\n".join(
-                    page.extract_text() or "" for page in pdf.pages
-                )
+            with pdfplumber.open(tmp_path) as pdf:
+                resume_text = "\n".join(p.extract_text() or "" for p in pdf.pages)
         finally:
-            os.remove(tmp)
+            os.remove(tmp_path)
 
-    region_context = (
-        "You are an expert AI career coach with deep knowledge of West African programs "
-        "(ALX Africa, Andela, Zindi, MEST, Google Africa) and infrastructure constraints. "
-        "You can answer in English or French.\n\n"
+    # Instruct the model to emit pure JSON
+    system_msg = (
+        "You are an expert AI career coach aware of West African programs "
+        "(ALX, Andela, Zindi, MEST, Google Africa). Respond with valid JSON only, "
+        "in this exact format:\n"
+        '{ "steps": [ { "title": "...", "description": "...", "links": ["https://..."] }, ... ] }\n'
     )
 
-    parts = [region_context]
-
+    # Build user prompt
+    user_parts = []
     if resume_text:
-        parts.append(f"Resume:\n{resume_text}")
-
+        user_parts.append(f"Resume:\n{resume_text}")
     if question:
-        parts.append(f"Question:\n{question}")
-
+        user_parts.append(f"Question:\n{question}")
     if goal:
-        parts.append(
-            f"Goal:\n{goal}\n\n"
-            "Please create a 3‑step learning roadmap with key skills, resources (with links), and an estimated timeline."
+        user_parts.append(
+            f"Goal:\n{goal}\n\nProvide a 3‑step learning roadmap with skills, resources, and timeline."
         )
+    prompt = "\n\n".join(user_parts)
 
-    prompt = "\n\n".join(parts)
-
-    response = client.chat.completions.create(
+    # Call OpenAI
+    resp = client.chat.completions.create(
         model=model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7
+        messages=[
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7,
+        max_tokens=700
     )
-    answer = response.choices[0].message.content
 
-    return {"answer": answer}
+    raw = resp.choices[0].message.content.strip()
+    print("Raw model output:", raw)
+
+    # Extract JSON substring
+    match = re.search(r"(\{.*\})", raw, re.DOTALL)
+    if not match:
+        raise HTTPException(500, f"Invalid JSON from model: {raw}")
+
+    json_str = match.group(1)
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        raise HTTPException(500, f"Invalid JSON from model: {e}")
+
+    return data
