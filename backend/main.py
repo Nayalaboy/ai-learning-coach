@@ -82,7 +82,7 @@ async def smart_coach(
         user_parts.append(f"Question:\n{question}")
     if goal:
         user_parts.append(
-            f"Goal:\n{goal}\n\nProvide a 3‑step learning roadmap with skills, resources, and timeline."
+            f"Goal:\n{goal}\n\nProvide a 3‑step learning roadmap with skills, resources, and timeline. Make sure to use platform that are widely used/recognized by african employers and adopted widely"
         )
     prompt = "\n\n".join(user_parts)
 
@@ -93,7 +93,7 @@ async def smart_coach(
             {"role": "system", "content": system_msg},
             {"role": "user", "content": prompt}
         ],
-        temperature=0.7,
+        temperature=0.8,
         max_tokens=700
     )
 

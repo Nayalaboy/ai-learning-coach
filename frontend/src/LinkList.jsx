@@ -1,47 +1,22 @@
-import { useState } from 'react';
+import React from 'react';
 
 export default function LinkList({ links }) {
-  const [expanded, setExpanded] = useState(false);
-
-  const first  = links[0];
-  const others = links.slice(1);
-  const pretty = (url) => url.replace(/^https?:\/\//, '');
-
   return (
-    <div className="space-y-2">
-      {/* first link (always visible) */}
-      <a
-        href={first.startsWith('http') ? first : `https://${first}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm hover:bg-blue-200"
-      >
-        {pretty(first)}
-      </a>
-
-      {/* toggle immediately under the first link */}
-      {others.length > 0 && (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="text-sm text-blue-600 hover:underline focus:outline-none"
+    <div className="flex flex-wrap gap-2">
+      {links.map((link, index) => (
+        <a
+          key={index}
+          href={link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700 hover:from-blue-100 hover:to-purple-100 hover:text-blue-800 transition-all duration-200 transform hover:scale-105"
         >
-          {expanded ? 'Show less' : `+${others.length} more`}
-        </button>
-      )}
-
-      {/* remaining links appear under the toggle when expanded */}
-      {expanded &&
-        others.map((url, idx) => (
-          <a
-            key={idx}
-            href={url.startsWith('http') ? url : `https://${url}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm hover:bg-blue-200"
-          >
-            {pretty(url)}
-          </a>
-        ))}
+          <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+          {new URL(link).hostname}
+        </a>
+      ))}
     </div>
   );
 }
