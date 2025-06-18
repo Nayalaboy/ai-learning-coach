@@ -1,114 +1,84 @@
-# backend/main.py
-
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, HttpUrl
-from typing import List, Optional
+import openai
 from openai import OpenAI
 import os
 import json
 import tempfile
 import re
 from dotenv import load_dotenv
+import fitz  # PyMuPDF
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("Missing OPENAI_API_KEY in .env")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-app = FastAPI(title="AI Learning Coach API")
+app = FastAPI()
+client = OpenAI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Change this in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+@app.get("/")
+def read_root():
+    return {"message": "✅ AI Resume Coach backend is running."}
 
-class Step(BaseModel):
-    title: str
-    description: str
-    links: List[HttpUrl] = []
 
-class CoachResponse(BaseModel):
-    steps: List[Step]
-
-@app.get("/", tags=["Health"])
-async def health():
-    return {"status": "ok"}
-
-@app.post("/smart-coach", response_model=CoachResponse, tags=["Coach"])
-async def smart_coach(
-    question: Optional[str] = Form(None),
-    goal: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None),
-    model: str = Form("gpt-4o")
+@app.post("/analyze")
+async def analyze(
+    file: UploadFile = File(None),
+    question: str = Form(None)
 ):
-    import pdfplumber  # lazy‑load so docs start fast
-
-    if not (file or question or goal):
-        raise HTTPException(400, "Please provide a PDF, a question, or a goal.")
-
-    # Extract resume text
-    resume_text = ""
-    if file:
-        if file.content_type != "application/pdf":
-            raise HTTPException(415, "Only PDFs are supported.")
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-            tmp.write(await file.read())
-            tmp_path = tmp.name
-        try:
-            with pdfplumber.open(tmp_path) as pdf:
-                resume_text = "\n".join(p.extract_text() or "" for p in pdf.pages)
-        finally:
-            os.remove(tmp_path)
-
-    # Instruct the model to emit pure JSON
-    system_msg = (
-        "You are an expert AI career coach aware of West African programs "
-        "(ALX, Andela, Zindi, MEST, Google Africa). Respond with valid JSON only, "
-        "in this exact format:\n"
-        '{ "steps": [ { "title": "...", "description": "...", "links": ["https://..."] }, ... ] }\n'
-    )
-
-    # Build user prompt
-    user_parts = []
-    if resume_text:
-        user_parts.append(f"Resume:\n{resume_text}")
-    if question:
-        user_parts.append(f"Question:\n{question}")
-    if goal:
-        user_parts.append(
-            f"Goal:\n{goal}\n\nProvide a 3‑step learning roadmap with skills, resources, and timeline. Make sure to use platform that are widely used/recognized by african employers and adopted widely"
+    
+    # If only question is provided, no resume
+    if not file and question:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful AI career coach."},
+                {"role": "user", "content": question},
+            ],
+            temperature=0.7,
         )
-    prompt = "\n\n".join(user_parts)
+        return {"answer": response.choices[0].message.content}
 
-    # Call OpenAI
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.8,
-        max_tokens=700
-    )
+    # If a resume file is uploaded (with or without question)
+    if file:
+        contents = await file.read()
+        with open("temp_resume.pdf", "wb") as f:
+            f.write(contents)
 
-    raw = resp.choices[0].message.content.strip()
-    print("Raw model output:", raw)
+        text = extract_text_from_pdf("temp_resume.pdf")
+        os.remove("temp_resume.pdf")
 
-    # Extract JSON substring
-    match = re.search(r"(\{.*\})", raw, re.DOTALL)
-    if not match:
-        raise HTTPException(500, f"Invalid JSON from model: {raw}")
+        messages = [
+            {"role": "system", "content": "You are a helpful AI coach who gives career feedback based on resumes and goals."},
+            {"role": "user", "content": f"My resume: {text}"},
+        ]
 
-    json_str = match.group(1)
-    try:
-        data = json.loads(json_str)
-    except json.JSONDecodeError as e:
-        raise HTTPException(500, f"Invalid JSON from model: {e}")
+        if question:
+            messages.append({"role": "user", "content": f"My goal is: {question}"})
 
-    return data
+        response = client.chat.ompletions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            temperature=0.7,
+        )
+
+        return {"answer": response.choices[0].message.content}
+
+    return {"answer": "No input provided."}
+
+def extract_text_from_pdf(pdf_path):
+    doc = fitz.open(pdf_path)
+    text = ""
+    for page in doc:
+        text += page.get_text()
+    return text.strip()
