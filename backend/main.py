@@ -7,7 +7,8 @@ import json
 import tempfile
 import re
 from dotenv import load_dotenv
-import fitz  # PyMuPDF
+import fitz 
+from ml.job_matcher import find_similar_jobs
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -85,3 +86,10 @@ def extract_text_from_pdf(pdf_path):
     for page in doc:
         text += page.get_text()
     return text.strip()
+
+@app.post("/recommend-roles")
+async def recommend_roles(input_text: str = Form(...)):
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    job_data_path = os.path.join(BASE_DIR, "ml", "data", "embedded_jobs.json")
+    matches = find_similar_jobs(input_text, job_data_path)
+    return {"matches": matches}
