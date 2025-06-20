@@ -70,8 +70,6 @@ function App() {
         <main className="flex-grow pt-20">
           <Routes>
             <Route path="/" element={<ResumeCoach />} />
-            <Route path="/about" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">About Page</div>} />
-            <Route path="/contact" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">Contact Page</div>} />
           </Routes>
         </main>
 
@@ -82,27 +80,27 @@ function App() {
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 tracking-wider uppercase">Product</h3>
                 <ul className="mt-4 space-y-4">
-                  <li><Link to="/features" className="text-gray-500 hover:text-gray-900">Features</Link></li>
-                  <li><Link to="/pricing" className="text-gray-500 hover:text-gray-900">Pricing</Link></li>
-                  <li><Link to="/roadmap" className="text-gray-500 hover:text-gray-900">Roadmap</Link></li>
+                  <li><Link to="/features" className="text-gray-500 hover:text-gray-900">Feature(I am workign on it, not ready yet)</Link></li>
+                  <li><Link to="/pricing" className="text-gray-500 hover:text-gray-900">Pricing(I am workign on it, not ready yet)</Link></li>
+                  <li><Link to="/roadmap" className="text-gray-500 hover:text-gray-900">Roadmap(I am workign on it, not ready yet)</Link></li>
                 </ul>
               </div>
-              <div>
+              {/* <div>
                 <h3 className="text-sm font-semibold text-gray-900 tracking-wider uppercase">Company</h3>
                 <ul className="mt-4 space-y-4">
                   <li><Link to="/about" className="text-gray-500 hover:text-gray-900">About</Link></li>
                   <li><Link to="/blog" className="text-gray-500 hover:text-gray-900">Blog</Link></li>
                   <li><Link to="/careers" className="text-gray-500 hover:text-gray-900">Careers</Link></li>
                 </ul>
-              </div>
-              <div>
+              </div> */}
+              {/* <div>
                 <h3 className="text-sm font-semibold text-gray-900 tracking-wider uppercase">Legal</h3>
                 <ul className="mt-4 space-y-4">
                   <li><Link to="/privacy" className="text-gray-500 hover:text-gray-900">Privacy</Link></li>
                   <li><Link to="/terms" className="text-gray-500 hover:text-gray-900">Terms</Link></li>
                   <li><Link to="/security" className="text-gray-500 hover:text-gray-900">Security</Link></li>
                 </ul>
-              </div>
+              </div> */}
             </div>
             <div className="mt-8 pt-8 border-t border-gray-200">
               <p className="text-gray-500 text-sm text-center">

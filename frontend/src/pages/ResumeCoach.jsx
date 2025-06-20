@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import ReactMarkdown from "react-markdown";
+
 
 const ResumeCoach = () => {
   const [resumeFile, setResumeFile] = useState(null);
@@ -46,13 +48,13 @@ const ResumeCoach = () => {
         </div>
 
         <div>
-          <label className="block font-semibold mb-2">Career Goal (optional)</label>
+          <label className="block font-semibold mb-2">Career Goal</label>
           <textarea
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            rows={4}
+            rows={3}
             placeholder="e.g. I want to become a machine learning engineer"
-            className="w-full border p-2 rounded"
+            className="w-full border p-3 rounded"
           />
         </div>
 
@@ -68,7 +70,7 @@ const ResumeCoach = () => {
       {answer && (
         <div className="mt-6 bg-gray-100 p-4 rounded">
           <h3 className="font-semibold text-gray-800">AI Coach Response:</h3>
-          <p className="text-gray-700 mt-2 whitespace-pre-wrap">{answer}</p>
+          <div className="mt-4 prose prose-sm prose-slate max-w-none"><ReactMarkdown>{answer}</ReactMarkdown></div>
         </div>
       )}
     </div>

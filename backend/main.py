@@ -42,7 +42,10 @@ async def analyze(
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a helpful AI career coach."},
+                {"role": "system", "content": ("You are a helpful and professional AI career coach. "
+    "When asked a question, respond in a clear and structured roadmap format, broken into these sections: "
+    "1. Current Strengths (if resume is provided), 2. Actionable Steps (bullet style), 3. Final Advice. "
+    "Keep responses concise but personalized. Use markdown styling like bold or headers if needed.")},
                 {"role": "user", "content": question},
             ],
             temperature=0.7,
@@ -66,7 +69,7 @@ async def analyze(
         if question:
             messages.append({"role": "user", "content": f"My goal is: {question}"})
 
-        response = client.chat.ompletions.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=messages,
             temperature=0.7,
